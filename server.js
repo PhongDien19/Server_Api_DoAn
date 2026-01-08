@@ -25,12 +25,6 @@ const db = mysql.createPool({
     }
 });
 
-// Đảm bảo dùng process.env.PORT cho Render
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT}`);
-});
-
 // Helper function để chạy query dạng Promise (cho gọn code)
 const query = (sql, params) => {
     return new Promise((resolve, reject) => {
@@ -43,8 +37,76 @@ const query = (sql, params) => {
 
 // ================= ROUTE API =================
 
-// API 1: Lấy danh sách sản phẩm (Home Screen)
-// URL: http://<IP>:3000/api/products
+// API 1: Đăng ký tài khoản
+// URL: POST http://<IP>:3000/api/auth/register
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { fullName, email, password, phone } = req.body;
+
+        if (!fullName || !email || !password) {
+            return res.json({ success: false, message: 'Vui lòng nhập đầy đủ thông tin!' });
+        }
+
+        const checkUser = await query("SELECT * FROM Users WHERE Email = ?", [email]);
+        if (checkUser.length > 0) {
+            return res.json({ success: false, message: 'Email này đã được đăng ký!' });
+        }
+
+        const sqlInsert = "INSERT INTO Users (FullName, Email, PasswordHash, Phone, RoleID) VALUES (?, ?, ?, ?, 2)";
+        const result = await query(sqlInsert, [fullName, email, password, phone || null]);
+
+        res.json({
+            success: true,
+            message: 'Đăng ký thành công!',
+            user: {
+                id: result.insertId,
+                fullName: fullName,
+                email: email,
+                avatarUrl: null
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Lỗi server khi đăng ký" });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.json({ success: false, message: 'Vui lòng nhập Email và Mật khẩu!' });
+        }
+
+        const users = await query("SELECT * FROM Users WHERE Email = ?", [email]);
+
+        if (users.length === 0) {
+            return res.json({ success: false, message: 'Email không tồn tại!' });
+        }
+
+        const user = users[0];
+
+        if (password !== user.PasswordHash) {
+            return res.json({ success: false, message: 'Mật khẩu không đúng!' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Đăng nhập thành công',
+            user: {
+                id: user.UserID,
+                fullName: user.FullName,
+                email: user.Email,
+                avatarUrl: user.AvatarURL
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Lỗi server khi đăng nhập" });
+    }
+});
+
 app.get('/api/products', async (req, res) => {
     try {
         const sql = `
@@ -60,10 +122,9 @@ app.get('/api/products', async (req, res) => {
             LEFT JOIN ProductSpecs ps ON p.ProductID = ps.ProductID
             WHERE p.IsActive = 1
         `;
-        
+
         const products = await query(sql);
 
-        // Xử lý ảnh null (Giống logic PHP cũ)
         const formattedProducts = products.map(p => ({
             ...p,
             ThumbnailURL: p.ThumbnailURL || "https://via.placeholder.com/300x300.png?text=No+Image"
@@ -80,29 +141,25 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// API 2: Lấy danh mục (Side Menu)
-// URL: http://<IP>:3000/api/categories
 app.get('/api/categories', async (req, res) => {
     try {
         const sql = "SELECT CategoryID, CategoryName, ParentID FROM Categories WHERE IsActive = 1";
         const categories = await query(sql);
-        
+
         res.json({
             success: true,
             data: categories
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ success: false, message: "Lỗi server" });
     }
 });
 
-// API 3: Lấy chi tiết sản phẩm + Ảnh Gallery
-// URL: http://<IP>:3000/api/products/:id
 app.get('/api/products/:id', async (req, res) => {
     try {
         const productId = req.params.id;
 
-        // Lấy thông tin cơ bản
         const sqlProduct = `
             SELECT p.*, ps.* FROM Products p 
             LEFT JOIN ProductSpecs ps ON p.ProductID = ps.ProductID
@@ -116,11 +173,9 @@ app.get('/api/products/:id', async (req, res) => {
 
         const product = products[0];
 
-        // Lấy thư viện ảnh
         const sqlImages = "SELECT ImageURL FROM ProductImages WHERE ProductID = ? ORDER BY SortOrder ASC";
         const images = await query(sqlImages, [productId]);
-        
-        // Gộp mảng ảnh vào object product
+
         product.Gallery = images.map(img => img.ImageURL);
 
         res.json({
@@ -133,9 +188,9 @@ app.get('/api/products/:id', async (req, res) => {
         res.status(500).json({ success: false, message: "Lỗi server" });
     }
 });
-
-// Khởi động server
-app.listen(PORT, () => {
+// Khởi động server (đảm bảo dùng process.env.PORT cho Render)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server đang chạy tại http://localhost:${PORT}`);
     console.log(`API Products: http://localhost:${PORT}/api/products`);
 });
