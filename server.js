@@ -12,11 +12,11 @@ app.use(bodyParser.json());
 
 // 1. Cấu hình kết nối Database (Kết nối vào XAMPP MySQL)
 const db = mysql.createPool({
-    host: '127.0.0.1',                      // Host của database
-    user: 'root',                           // User của database
-    password: '',                           // Password của database
-    database: 'ckcdigitalstore',            // Tên database
-    port: 3306,                             // Cổng kết nối (nếu khác cổng mặc định)
+    host: process.env.DB_HOST,              // Host của database
+    user: process.env.DB_USER,              // User của database
+    password: process.env.DB_PASSWORD,      // Password của database
+    database: process.env.DB_NAME,          // Tên database
+    port: process.env.DB_PORT,              // Cổng kết nối (nếu khác cổng mặc định)
     connectionLimit: 10,
     queueLimit: 0
 });
@@ -74,7 +74,7 @@ app.get('/api/products', async (req, res) => {
 // URL: http://<IP>:3000/api/categories
 app.get('/api/categories', async (req, res) => {
     try {
-        const sql = "SELECT CategoryID, CategoryName, ParentID FROM categories WHERE IsActive = 1";
+        const sql = "SELECT categoryID, CategoryName, ParentID FROM categories WHERE IsActive = 1";
         const categories = await query(sql);
         
         res.json({
@@ -107,7 +107,7 @@ app.get('/api/products/:id', async (req, res) => {
         const product = products[0];
 
         // Lấy thư viện ảnh
-        const sqlImages = "SELECT ImageURL FROM productimages WHERE ProductID = ? ORDER BY SortOrder ASC";
+        const sqlImages = "SELECT imageURL FROM productimages WHERE ProductID = ? ORDER BY SortOrder ASC";
         const images = await query(sqlImages, [productId]);
         
         // Gộp mảng ảnh vào object product
@@ -140,7 +140,7 @@ app.get('/api/products/:id/reviews', async (req, res) => {
                 u.FullName as UserName
             FROM reviews r
             JOIN users u ON r.UserID = u.UserID
-            JOIN orderdetails od ON r.OrderID = od.OrderID
+            JOIN OrderDetails od ON r.OrderID = od.OrderID
             WHERE od.ProductID = ?
             ORDER BY r.ReviewDate DESC
         `;
@@ -475,7 +475,7 @@ app.get('/api/promotions', async (req, res) => {
 app.get('/api/shipping-methods', async (req, res) => {
     try {
         // Giả sử tên bảng là ShippingMethods (dựa theo ảnh bạn gửi)
-        const sql = "SELECT * FROM shippingmethods ORDER BY Cost ASC";
+        const sql = "SELECT * FROM ShippingMethods ORDER BY Cost ASC";
         const methods = await query(sql);
         res.json({ success: true, data: methods });
     } catch (error) {
@@ -636,16 +636,16 @@ app.post('/api/wishlist/toggle', async (req, res) => {
         const { userId, productId } = req.body;
         
         // Kiểm tra xem đã like chưa
-        const checkSql = "SELECT * FROM wishlist WHERE UserID = ? AND ProductID = ?";
+        const checkSql = "SELECT * FROM Wishlist WHERE UserID = ? AND ProductID = ?";
         const existing = await query(checkSql, [userId, productId]);
 
         if (existing.length > 0) {
             // Nếu có rồi -> Xóa (Unlike)
-            await query("DELETE FROM wishlist WHERE UserID = ? AND ProductID = ?", [userId, productId]);
+            await query("DELETE FROM Wishlist WHERE UserID = ? AND ProductID = ?", [userId, productId]);
             res.json({ success: true, message: "Đã xóa khỏi yêu thích", isFavorite: false });
         } else {
             // Nếu chưa có -> Thêm (Like)
-            await query("INSERT INTO wishlist (UserID, ProductID) VALUES (?, ?)", [userId, productId]);
+            await query("INSERT INTO Wishlist (UserID, ProductID) VALUES (?, ?)", [userId, productId]);
             res.json({ success: true, message: "Đã thêm vào yêu thích", isFavorite: true });
         }
     } catch (error) {
@@ -661,8 +661,8 @@ app.get('/api/wishlist/:userId', async (req, res) => {
         const userId = req.params.userId;
         const sql = `
             SELECT w.WishlistID, p.ProductID, p.ProductName, p.Price, p.ThumbnailURL 
-            FROM wishlist w
-            JOIN products p ON w.ProductID = p.ProductID
+            FROM Wishlist w
+            JOIN Products p ON w.ProductID = p.ProductID
             WHERE w.UserID = ?
             ORDER BY w.AddedDate DESC
         `;
@@ -674,10 +674,11 @@ app.get('/api/wishlist/:userId', async (req, res) => {
 });
 
 // 3. Kiểm tra trạng thái yêu thích của 1 sản phẩm (Để tô màu trái tim)
+// URL: GET /api/wishlist/check/:userId/:productId
 app.get('/api/wishlist/check/:userId/:productId', async (req, res) => {
     try {
         const { userId, productId } = req.params;
-        const sql = "SELECT * FROM wishlist WHERE UserID = ? AND ProductID = ?";
+        const sql = "SELECT * FROM Wishlist WHERE UserID = ? AND ProductID = ?";
         const result = await query(sql, [userId, productId]);
         
         res.json({ success: true, isFavorite: result.length > 0 });
@@ -808,7 +809,7 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
 });
 
 // Khởi động server
-app.listen(PORT, () => {
-    console.log(`Server đang chạy tại http://localhost:${PORT}`);
-    console.log(`API Products: http://localhost:${PORT}/api/products`);
+app.listen(process.env.PORT, () => {
+    console.log(`Server đang chạy tại http://localhost:${process.env.PORT}`);
+    console.log(`API Products: http://localhost:${process.env.PORT}/api/products`);
 });
