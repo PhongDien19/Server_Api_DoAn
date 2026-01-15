@@ -808,6 +808,44 @@ app.put('/api/orders/:orderId/status', async (req, res) => {
     }
 });
 
+app.get('/api/products/:id/reviews', async (req, res) => {
+    try {
+        const productId = req.params.id;
+        const sql = `
+            SELECT
+                r.ReviewID,
+                r.Rating,
+                r.Comment,
+                r.ReviewDate,
+                u.FullName as UserName
+            FROM reviews r
+            JOIN users u ON r.UserID = u.UserID
+            JOIN OrderDetails od ON r.OrderID = od.OrderID
+            WHERE od.ProductID = ?       
+            ORDER BY r.ReviewDate DESC
+        `;
+        const reviews = await query(sql, [productId]);
+        res.json({ success: true, data: reviews });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Lỗi server" });
+    }
+});           
+
+app.post('/api/products/:id/reviews', async (req, res) => {
+    try {
+        const productId = req.params.id;
+        const { userId, orderId, rating, comment } = req.body;
+        const sql = `
+            INSERT INTO reviews (ProductID, UserID, OrderID, Rating, Comment, ReviewDate)
+            VALUES (?, ?, ?, ?, ?, NOW())`;
+        await query(sql, [productId, userId, orderId, rating, comment]);
+        res.json({ success: true, message: "Đánh giá đã được thêm thành công." });
+    } catch (error) {
+        console.error("Lỗi thêm đánh giá:", error);
+        res.status(500).json({ success: false, message: "Lỗi server" });
+    }
+});
+
 // Khởi động server
 app.listen(process.env.PORT, () => {
     console.log(`Server đang chạy tại http://localhost:${process.env.PORT}`);
